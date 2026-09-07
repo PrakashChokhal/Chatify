@@ -17,16 +17,27 @@ import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import { app, server } from "./lib/socket.js";
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
-const publicDir = path.join(process.cwd(), "public");
+const staticDir = fs.existsSync(path.join(process.cwd(), "public"))
+  ? path.join(process.cwd(), "public")
+  : fs.existsSync(path.join(process.cwd(), "frontend/dist"))
+  ? path.join(process.cwd(), "frontend/dist")
+  : fs.existsSync(path.join(process.cwd(), "../frontend/dist"))
+  ? path.join(process.cwd(), "../frontend/dist")
+  : null;
 
 // it's important that you don't parse the webhook event data, it should be in the raw format
 app.use("/api/webhooks/clerk", express.raw({ type: "application/json" }), clerkWebhook);
 
 app.use(express.json());
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+app.use(
+  cors({
+    origin: FRONTEND_URL ? FRONTEND_URL : true,
+    credentials: true,
+  })
+);
 app.use(clerkMiddleware());
 
 app.get("/health", (req, res) => {
@@ -36,13 +47,12 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-// if the public directory exists, serve the static files
-// this is for the production build
-if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
+// if static directory exists, serve the static files for production
+if (staticDir) {
+  app.use(express.static(staticDir));
 
   app.get("/{*any}", (req, res, next) => {
-    res.sendFile(path.join(publicDir, "index.html"), (err) => next(err));
+    res.sendFile(path.join(staticDir, "index.html"), (err) => next(err));
   });
 }
 
